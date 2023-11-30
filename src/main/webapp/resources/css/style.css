@@ -1,0 +1,163 @@
+
+* {
+    font-family: monospace;
+    font-weight: normal;
+}
+
+body {
+    background-attachment: fixed;
+    background-size: cover;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+    padding-top: 60px;
+}
+
+.ui-slider {
+    border: none;
+    background: transparent;
+    margin: 0;
+    padding: 0;
+}
+
+.ui-slider .ui-slider-handle {
+    cursor: pointer;
+    border: 1px solid #ccc;
+    background: #fff;
+}
+
+.ui-slider .ui-slider-range {
+    background-color: violet;
+    border: none;
+}
+canvas#clock {
+    position: relative;
+}
+
+header {
+    text-align: center;
+    font-size: large;
+    top: 0;
+}
+
+
+footer {
+    bottom: 0
+}
+
+header,
+footer {
+    z-index: 10;
+    width: 100%;
+    position: fixed;
+    color: black;
+    background-color: lavender;
+    left: 0;
+}
+
+tr[id=result] {
+    border-collapse: collapse;
+    border: 1px solid mediumpurple;
+    width: 100%;
+    background-blend-mode: normal;
+    background-color: lavender;
+}
+
+
+th {
+    border: 2px solid mediumpurple;
+    width: 6px;
+}
+
+tr * {
+    margin-top: 4%
+}
+
+td * {
+    margin-bottom: 4%
+}
+
+input,
+svg {
+
+    border: 2px solid mediumpurple;
+    border-radius: 5px;
+    background-color: white;
+}
+
+
+input,
+a {
+    cursor: pointer;
+}
+
+#footer {
+
+    text-align: center;
+}
+
+ .buttons-container {
+     margin-left: auto;
+     margin-right: auto;
+ }
+
+
+table[class=input] {
+    background-color: white;
+    border: 2px solid mediumpurple;
+    border-radius: 5px;
+}
+
+tbody[id=main] {
+    background-color: white;
+    border: 2px solid mediumpurple;
+    border-radius: 5px;
+}
+
+svg {
+    width: 310px;
+    height: 310px;
+    box-shadow: inset 0 0 5px 1px grey;
+    position: relative;
+    top: 40px;
+    bottom: 40px;
+}
+
+
+
+.table-t th,
+.table-t td {
+    border: 1px solid mediumpurple !important;
+    width: 100%;
+!important;
+    padding: 8px !important;
+    text-align: center !important;
+}
+
+.ui-datatable .table-t th,
+.ui-datatable .table-t td {
+    border: 1px solid mediumpurple !important;
+    width: 100%;
+!important;
+    padding: 8px !important;
+    text-align: center !important;
+}
+
+.ui-datatable .ui-datatable-empty-message td {
+}
+
+#main-table  {
+    margin-bottom: 130px;
+}
+
+
+
+tr:hover td {
+    color: mediumpurple;
+}
+
+div span {
+    background-blend-mode: normal;
+}

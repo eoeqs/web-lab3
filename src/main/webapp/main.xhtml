@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:h="http://xmlns.jcp.org/jsf/html"
+      xmlns:f="http://xmlns.jcp.org/jsf/core"
+      xmlns:p="http://primefaces.org/ui">
+<h:head>
+    <title> Main </title>
+    <h:outputStylesheet library="css" name="style.css"/>
+</h:head>
+<h:body>
+    <div id="header">
+        <header>
+            Иванова Александра, Р3218, вариант 88291
+        </header>
+    </div>
+    <table id="main-table">
+        <tbody id="main">
+        <tr>
+            <td id="content-graph" rowspan="6">
+                <svg xmlns="http://www.w3.org/2000/svg" id="svg">
+                    <line x1="0" y1="150" x2="300" y2="150" stroke="black"></line>
+                    <line x1="150" y1="0" x2="150" y2="300" stroke="black"></line>
+
+                    <line x1="250" y1="145" x2="250" y2="155" stroke="black"></line>
+                    <line x1="200" y1="145" x2="200" y2="155" stroke="black"></line>
+                    <line x1="100" y1="145" x2="100" y2="155" stroke="black"></line>
+                    <line x1="50" y1="145" x2="50" y2="155" stroke="black"></line>
+
+                    <line x1="145" y1="50" x2="155" y2="50" stroke="black"></line>
+                    <line x1="145" y1="100" x2="155" y2="100" stroke="black"></line>
+                    <line x1="145" y1="200" x2="155" y2="200" stroke="black"></line>
+                    <line x1="145" y1="250" x2="155" y2="250" stroke="black"></line>
+
+                    <text x="245" y="140" stroke="black">R</text>
+                    <text x="185" y="140" stroke="black">R/2</text>
+                    <text x="77" y="140" stroke="black">-R/2</text>
+                    <text x="37" y="140" stroke="black">-R</text>
+                    <text x="156" y="55" stroke="black">R</text>
+                    <text x="156" y="105" stroke="black">R/2</text>
+                    <text x="156" y="205" stroke="black">-R/2</text>
+                    <text x="156" y="255" stroke="black">-R</text>
+                    <polygon points="300,150 295,155 295, 145" fill="black" stroke="black"></polygon>
+                    <polygon points="150,0 145,5 155,5" fill="black" stroke="black"></polygon>
+
+                    <rect x="50" y="100" width="100" height="50" fill-opacity="0.4" stroke="navy" fill="blue"></rect>
+                    <polygon points="150,150 150,200 250,150" fill-opacity="0.4" stroke="navy" fill="blue"></polygon>
+                    <path d="M 150 150 L 100 150 C 100 150 100 200 150 200 Z" fill-opacity="0.4" stroke="navy"
+                          fill="blue">
+                    </path>
+                </svg>
+            </td>
+            <td class="form-items">
+                <h:form id="form">
+                    <table>
+                        <tbody>
+                        <tr>
+                            <td class="label">
+                                <label>
+                                    X value:
+                                </label>
+                                <h:inputHidden id="x" value="#{point.x}"/>
+                                <p:slider for="x" display="x_out" minValue="-5" maxValue="5" step="1">
+                                </p:slider>
+                                <h:outputText id="x_out" value="#{point.x}"/>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="label">
+                                <label>
+                                    Y value:
+                                    <p:inputText id="y" name="y" maxlength="10" value="#{point.y}">
+                                        <f:validateDoubleRange minimum="-3" maximum="3"/>
+                                    </p:inputText>
+                                    <p:message for="y" display="text"/>
+                                </label>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="label">
+                                <label>
+                                    R value:
+                                </label>
+                                <p:selectOneMenu widgetVar="RDropDown" id="r" value="#{point.r}">
+                                    <f:selectItem itemValue="1" itemLabel="1"/>
+                                    <f:selectItem itemValue="2" itemLabel="2"/>
+                                    <f:selectItem itemValue="3" itemLabel="3"/>
+                                    <f:selectItem itemValue="4" itemLabel="4"/>
+                                    <f:selectItem itemValue="5" itemLabel="5"/>
+                                    <p:ajax update="drawDotsPanel"/>
+                                    <!--                        updateErrorMessageR"/>-->
+                                </p:selectOneMenu>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="buttons-container">
+                                <p:commandButton ajax="true" id="submit" value="Submit"
+                                                 action="#{pointRepository.addPoint(point)}"
+                                                 update="table @form drawDotsPanel"/>
+                                <p:commandButton ajax="true" id="reset" value="Clear"
+                                                 action="#{pointRepository.clearPoints()}"
+                                                 update="table @form drawDotsPanel"/>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </h:form>
+            </td>
+        </tr>
+        </tbody>
+    </table>
+
+    <p:dataTable id="table" value="#{pointsList}" var="item" paginator="true"
+                 paginatorTemplate="{CurrentPageReport} {FirstPageLink} {PreviousPageLink} {PageLinks} {NextPageLink} {LastPageLink}"
+                 rows="10" paginatorPosition="bottom" paginatorAlwaysVisible="true"
+                 style="width: 750px" styleClass="table-t">
+
+        <p:column headerText="X">
+            <h:outputText value="#{item.x}">
+                <f:convertNumber type="number" maxFractionDigits="3" groupingUsed="false"/>
+            </h:outputText>
+        </p:column>
+
+        <p:column headerText="Y">
+            <h:outputText value="#{item.y}">
+                <f:convertNumber type="number" maxFractionDigits="3" groupingUsed="false"/>
+            </h:outputText>
+        </p:column>
+
+        <p:column headerText="R">
+            <h:outputText value="#{item.r}"/>
+        </p:column>
+
+        <p:column headerText="Result" styleClass="#{item.result ? 'result-yes' : 'result-no'}">
+            <h:outputText value="#{item.result ? 'Hit' : 'Miss' }"/>
+        </p:column>
+
+    </p:dataTable>
+
+</h:body>
+
+<h:panelGroup id="drawDotsPanel">
+    <h:outputScript>
+        window.redrawDots();
+    </h:outputScript>
+</h:panelGroup>
+
+<p:remoteCommand name="addPoint" action="#{pointRepository.addPointFromJs()}" update="table"
+                 process="@this"/>
+<!--<p:remoteCommand name="updateGraph" update="drawDotsPanel" process="@this"/>-->
+<script src="resources/js/script.js"></script>
+</html>
