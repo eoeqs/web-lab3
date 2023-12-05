@@ -87,6 +87,24 @@ function handleRRChange() {
             }
         });
     });
-    redrawPoints();
+
+    const table = document.getElementById("table_data");
+
+    document.querySelectorAll("circle").forEach((i) => {
+        i.remove()
+    });
+
+    if (table) {
+        for (let item of table.rows) {
+            const x = parseFloat(item.children[0].innerText.trim().replace(",", "."));
+            const y = parseFloat(item.children[1].innerText.trim().replace(",", "."));
+            const r = parseFloat(PF('RDropDown').getSelectedValue());
+            const result = item.children[3].innerText.trim() === "Hit";
+            console.log(x,y,r,result)
+            if (isNaN(x) || isNaN(y) || isNaN(r)) continue;
+            drawPoint(x, y, r, result);
+        }
+    }
 }
+
 
