@@ -7,6 +7,7 @@ import jakarta.validation.constraints.NotNull;
 import lombok.*;
 
 import java.io.Serializable;
+import java.util.Objects;
 
 @Entity
 @ToString
@@ -57,21 +58,52 @@ public class Point implements Serializable {
     @Column(name = "id", nullable = false, unique = true)
     private int id;
 
-    @NotNull
+    @Override
+    public String toString() {
+        return "Point{" +
+                "id=" + id +
+                ", x=" + x +
+                ", y=" + y +
+                ", r=" + r +
+                ", result=" + result +
+                '}';
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Point point = (Point) o;
+        return id == point.id && Double.compare(x, point.x) == 0 && Double.compare(y, point.y) == 0 && Double.compare(r, point.r) == 0 && result == point.result;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id, x, y, r, result);
+    }
+
+    public void setId(int id) {
+        this.id = id;
+    }
+
+    public int getId() {
+        return id;
+    }
+
+    public boolean isResult() {
+        return result;
+    }
+
     @Column(name = "x", nullable = false)
     private double x;
 
-    @NotNull
     @Column(name = "y", nullable = false)
     private double y;
 
-    @NotNull
     @Column(name = "r", nullable = false)
     private double r;
 
-    @NotNull
     @Column(name = "result", nullable = false)
-    @Getter
     private boolean result;
 
 

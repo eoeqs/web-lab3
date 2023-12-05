@@ -32,14 +32,14 @@
                     <line x1="145" y1="200" x2="155" y2="200" stroke="black"></line>
                     <line x1="145" y1="250" x2="155" y2="250" stroke="black"></line>
 
-                    <text x="245" y="140" stroke="black">R</text>
-                    <text x="185" y="140" stroke="black">R/2</text>
-                    <text x="77" y="140" stroke="black">-R/2</text>
-                    <text x="37" y="140" stroke="black">-R</text>
-                    <text x="156" y="55" stroke="black">R</text>
-                    <text x="156" y="105" stroke="black">R/2</text>
-                    <text x="156" y="205" stroke="black">-R/2</text>
-                    <text x="156" y="255" stroke="black">-R</text>
+                    <text class="rLabel" id="r" x="245" y="140" stroke="black">R</text>
+                    <text class="rLabel" id="r" x="185" y="140" stroke="black">R/2</text>
+                    <text class="rLabel" id="r" x="77" y="140" stroke="black">-R/2</text>
+                    <text class="rLabel" id="r" x="37" y="140" stroke="black">-R</text>
+                    <text class="rLabel" id="r" x="156" y="55" stroke="black">R</text>
+                    <text class="rLabel" id="r" x="156" y="105" stroke="black">R/2</text>
+                    <text class="rLabel" id="r" x="156" y="205" stroke="black">-R/2</text>
+                    <text class="rLabel" id="r" x="156" y="255" stroke="black">-R</text>
                     <polygon points="300,150 295,155 295, 145" fill="black" stroke="black"></polygon>
                     <polygon points="150,0 145,5 155,5" fill="black" stroke="black"></polygon>
 
@@ -81,15 +81,16 @@
                                 <label>
                                     R value:
                                 </label>
-                                <p:selectOneMenu widgetVar="RDropDown" id="r" value="#{point.r}">
+                                <p:selectOneMenu widgetVar="RDropDown" id="r" value="#{point.r}"  >
                                     <f:selectItem itemValue="1" itemLabel="1"/>
                                     <f:selectItem itemValue="2" itemLabel="2"/>
                                     <f:selectItem itemValue="3" itemLabel="3"/>
                                     <f:selectItem itemValue="4" itemLabel="4"/>
                                     <f:selectItem itemValue="5" itemLabel="5"/>
-                                    <p:ajax update="drawDotsPanel"/>
-                                    <!--                        updateErrorMessageR"/>-->
+                                    <p:ajax update="handleRChange"/>
+
                                 </p:selectOneMenu>
+
                             </td>
                         </tr>
                         <tr>
@@ -110,9 +111,7 @@
         </tbody>
     </table>
 
-    <p:dataTable id="table" value="#{pointsList}" var="item" paginator="true"
-                 paginatorTemplate="{CurrentPageReport} {FirstPageLink} {PreviousPageLink} {PageLinks} {NextPageLink} {LastPageLink}"
-                 rows="10" paginatorPosition="bottom" paginatorAlwaysVisible="true"
+    <p:dataTable id="table" value="#{pointsList}" var="item"
                  style="width: 750px" styleClass="table-t">
 
         <p:column headerText="X">
@@ -138,7 +137,12 @@
     </p:dataTable>
 
 </h:body>
-
+<script src="resources/js/script.js"></script>
+<h:panelGroup id="handleRChange">
+    <h:outputScript>
+        window.handleRRRChange();
+    </h:outputScript>
+</h:panelGroup>
 <h:panelGroup id="drawDotsPanel">
     <h:outputScript>
         window.redrawDots();
@@ -146,7 +150,6 @@
 </h:panelGroup>
 
 <p:remoteCommand name="addPoint" action="#{pointRepository.addPointFromJs()}" update="table"
-                 process="@this"/>
+process="@this"/>
 <!--<p:remoteCommand name="updateGraph" update="drawDotsPanel" process="@this"/>-->
-<script src="resources/js/script.js"></script>
 </html>
