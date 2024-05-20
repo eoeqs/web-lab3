@@ -3,18 +3,16 @@ plugins {
     id 'war'
     id 'org.flywaydb.flyway' version '9.8.1'
 }
+def projectProps = new Properties()
+projectProps.load(new FileInputStream(rootProject.file("build.properties")))
 
 
 repositories {
     mavenCentral()
 }
 
-ext {
-    junitVersion = '5.9.2'
-}
-
-sourceCompatibility = '11'
-targetCompatibility = '11'
+sourceCompatibility = projectProps.getProperty('sourceCompatibility')
+targetCompatibility = projectProps.getProperty('targetCompatibility')
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
@@ -35,18 +33,131 @@ dependencies {
     implementation('com.google.code.gson:gson:2.10.1')
 
 
-    testImplementation("org.junit.jupiter:junit-jupiter-api:${junitVersion}")
-    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:${junitVersion}")}
+//    testImplementation("org.junit.jupiter:junit-jupiter-api:${junitVersion}")
+//    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:${junitVersion}")
+}
 
 test {
     useJUnitPlatform()
 }
 
 flyway {
-    locations = ["filesystem:./sql/migrations"]
-    url = "jdbc:postgresql://helios.cs.ifmo.ru:5432/studs"
-    user = "s367243"
-    password = "10s5iDYWGyVq2DuB"
-    schemas = ['public']
+    locations = [projectProps.getProperty('flywayLocations')]
+    url = projectProps.getProperty('dbUrl')
+    user = projectProps.getProperty('dbUser')
+    password = projectProps.getProperty('dbPassword')
+    schemas = [projectProps.getProperty('flywaySchemas')]
 }
 flywayMigrate.dependsOn(classes)
+
+jar {
+    manifest {
+        attributes(
+                'Main-Class': projectProps.getProperty('mainClass'),
+                'Implementation-Version': projectProps.getProperty('projectVersion')
+        )
+    }
+}
+tasks.register('compile') {
+    group = 'build'
+    description = 'Compilation of the project source code'
+    dependsOn 'compileJava'
+}
+
+tasks.register('build_task') {
+    group = 'build'
+    description = 'Building the project and packing it into an executable Jar archive'
+    dependsOn 'compile'
+    finalizedBy 'jar'
+}
+
+tasks.register('clean_task') {
+    group = 'build'
+    description = 'Deleting all temporary files and compiled classes'
+    dependsOn 'cleanJava'
+    doLast {
+        delete fileTree(dir: 'build', exclude: 'libs/')
+    }
+}
+
+tasks.register('cleanJava', Delete) {
+    description = 'Delete compiled Java classes'
+    delete 'build/classes/java/main'
+}
+
+tasks.register('test_task') {
+    group = 'verification'
+    description = 'Launching JUnit tests of the project'
+    dependsOn 'build_task'
+    finalizedBy 'test'
+}
+
+
+tasks.register('javadoc_task', Javadoc) {
+    group = 'documentation'
+    description = 'Generate javadoc'
+    dependsOn 'compile'
+
+    source = sourceSets.main.allJava
+    destinationDir = file("${buildDir}/javadoc")
+    classpath = sourceSets.main.compileClasspath
+
+    options {
+        encoding = 'UTF-8'
+        charSet = 'UTF-8'
+        links("https://docs.oracle.com/javase/8/docs/api/")
+        addStringOption('Xdoclint:none', '-quiet')
+    }
+}
+
+import java.security.MessageDigest
+
+tasks.register('md5sha1') {
+    group = 'build'
+    description = 'Calculating MD5 and SHA-1 checksums'
+    dependsOn 'jar'
+    doLast {
+        def jarFile = file("build/libs/${project.name}.jar")
+        if (!jarFile.exists()) {
+            throw new FileNotFoundException("JAR file not found: ${jarFile.absolutePath}")
+        }
+
+        def md5 = MessageDigest.getInstance("MD5")
+        def sha1 = MessageDigest.getInstance("SHA-1")
+
+        jarFile.withInputStream { input ->
+            byte[] buffer = new byte[8192]
+            int bytesRead
+            while ((bytesRead = input.read(buffer)) != -1) {
+                md5.update(buffer, 0, bytesRead)
+                sha1.update(buffer, 0, bytesRead)
+            }
+        }
+
+        def md5Hex = md5.digest().encodeHex().toString()
+        def sha1Hex = sha1.digest().encodeHex().toString()
+
+        def manifestFile = file("${buildDir}/tmp/jar/MANIFEST.MF")
+        manifestFile.parentFile.mkdirs()
+        manifestFile.withWriterAppend { writer ->
+            writer.println("MD5-Digest: ${md5Hex}")
+            writer.println("SHA1-Digest: ${sha1Hex}")
+        }
+    }
+}
+
+tasks.register('doc') {
+    group = 'documentation'
+    description = 'Creating documentation, including Javadoc, and adding checksums to the manifest'
+    dependsOn 'javadoc_task', 'md5sha1'
+}
+
+
+
+
+
+
+
+
+
+
