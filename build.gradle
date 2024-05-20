@@ -3,18 +3,16 @@ plugins {
     id 'war'
     id 'org.flywaydb.flyway' version '9.8.1'
 }
+def projectProps = new Properties()
+projectProps.load(new FileInputStream(rootProject.file("build.properties")))
 
 
 repositories {
     mavenCentral()
 }
 
-ext {
-    junitVersion = '5.9.2'
-}
-
-sourceCompatibility = '11'
-targetCompatibility = '11'
+sourceCompatibility = projectProps.getProperty('sourceCompatibility')
+targetCompatibility = projectProps.getProperty('targetCompatibility')
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
@@ -35,18 +33,322 @@ dependencies {
     implementation('com.google.code.gson:gson:2.10.1')
 
 
-    testImplementation("org.junit.jupiter:junit-jupiter-api:${junitVersion}")
-    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:${junitVersion}")}
+//    testImplementation("org.junit.jupiter:junit-jupiter-api:${junitVersion}")
+//    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:${junitVersion}")
+}
 
 test {
     useJUnitPlatform()
 }
 
 flyway {
-    locations = ["filesystem:./sql/migrations"]
-    url = "jdbc:postgresql://helios.cs.ifmo.ru:5432/studs"
-    user = "s367243"
-    password = "10s5iDYWGyVq2DuB"
-    schemas = ['public']
+    locations = [projectProps.getProperty('flywayLocations')]
+    url = projectProps.getProperty('dbUrl')
+    user = projectProps.getProperty('dbUser')
+    password = projectProps.getProperty('dbPassword')
+    schemas = [projectProps.getProperty('flywaySchemas')]
 }
 flywayMigrate.dependsOn(classes)
+
+jar {
+    manifest {
+        attributes(
+                'Main-Class': projectProps.getProperty('mainClass'),
+                'Implementation-Version': projectProps.getProperty('projectVersion')
+        )
+    }
+}
+tasks.register('compile') {
+    group = 'build'
+    description = 'Compilation of the project source code'
+    dependsOn 'compileJava'
+}
+
+tasks.register('build_task') {
+    group = 'build'
+    description = 'Building the project and packing it into an executable Jar archive'
+    dependsOn 'compile'
+    finalizedBy 'jar'
+}
+
+tasks.register('clean_task') {
+    group = 'build'
+    description = 'Deleting all temporary files and compiled classes'
+    dependsOn 'cleanJava'
+    doLast {
+        delete fileTree(dir: 'build', exclude: 'libs/')
+    }
+}
+
+tasks.register('test_task') {
+    group = 'verification'
+    description = 'Launching JUnit tests of the project'
+    dependsOn 'build'
+    finalizedBy 'test'
+}
+
+tasks.register('native2ascii') {
+    group = 'build'
+    description = 'Converting localization files to ASCII'
+    doLast {
+        def i18nDir = new File('src/main/resources/i18n/')
+        i18nDir.eachFile { file ->
+            def outputFile = new File(file.absolutePath + '.ascii')
+            exec {
+                commandLine 'native2ascii', '-encoding', 'UTF-8', file.absolutePath, outputFile.absolutePath
+            }
+        }
+    }
+}
+
+tasks.register('xml') {
+    group = 'verification'
+    description = 'Validate all XML files'
+    doLast {
+        def xmlFiles = fileTree(dir: 'src/main', include: '**/*.xml')
+        xmlFiles.each { xmlFile ->
+            exec {
+                commandLine 'xmllint', '--noout', '--valid', xmlFile.absolutePath
+            }
+        }
+    }
+}
+
+tasks.register('javadoc_task', Javadoc) {
+    group = 'documentation'
+    description = 'Generate javadoc'
+    dependsOn 'compile'
+
+    source = sourceSets.main.allJava
+    destinationDir = file("${buildDir}/javadoc")
+    classpath = sourceSets.main.compileClasspath
+
+    options {
+        encoding = 'UTF-8'
+        charSet = 'UTF-8'
+        links("https://docs.oracle.com/javase/8/docs/api/")
+        addStringOption('Xdoclint:none', '-quiet')
+    }
+}
+import java.security.MessageDigest
+
+tasks.register('md5sha1') {
+    group = 'build'
+    description = 'Calculating MD5 and SHA-1 checksums'
+    dependsOn 'jar'
+    doLast {
+        def jarFile = file("build/libs/${project.name}.jar")
+        if (!jarFile.exists()) {
+            throw new FileNotFoundException("JAR file not found: ${jarFile.absolutePath}")
+        }
+
+        def md5 = MessageDigest.getInstance("MD5")
+        def sha1 = MessageDigest.getInstance("SHA-1")
+
+        jarFile.withInputStream { input ->
+            byte[] buffer = new byte[8192]
+            int bytesRead
+            while ((bytesRead = input.read(buffer)) != -1) {
+                md5.update(buffer, 0, bytesRead)
+                sha1.update(buffer, 0, bytesRead)
+            }
+        }
+
+        def md5Hex = md5.digest().encodeHex().toString()
+        def sha1Hex = sha1.digest().encodeHex().toString()
+
+        def manifestFile = file("${buildDir}/tmp/jar/MANIFEST.MF")
+        manifestFile.parentFile.mkdirs()
+        manifestFile.withWriterAppend { writer ->
+            writer.println("MD5-Digest: ${md5Hex}")
+            writer.println("SHA1-Digest: ${sha1Hex}")
+        }
+    }
+}
+
+tasks.register('doc') {
+    group = 'documentation'
+    description = 'Creating documentation, including Javadoc, and adding checksums to the manifest'
+    dependsOn 'javadoc_task', 'md5sha1'
+}
+
+
+tasks.register('team') {
+    group = 'build'
+    description = 'Getting the 3 previous revisions from git, building them and packing them into a zip archive'
+
+    doLast {
+        def revisions = []
+        def warFiles = []
+
+        def proc = "git rev-list -n 4 HEAD".execute()
+        proc.in.eachLine { line ->
+            revisions << line
+        }
+
+        revisions = revisions.drop(1)
+
+        revisions.each { revision ->
+            println "Building revision: ${revision}"
+
+            def checkoutProc = "git checkout ${revision}".execute()
+            checkoutProc.waitFor()
+            if (checkoutProc.exitValue() != 0) {
+                throw new GradleException("Failed to checkout revision: ${revision}")
+            }
+
+            def gradlewCommand = System.getProperty('os.name').toLowerCase().contains('win') ? 'gradlew.bat' : './gradlew'
+            def buildProc = "${gradlewCommand} clean build".execute()
+            buildProc.waitFor()
+            if (buildProc.exitValue() != 0) {
+                throw new GradleException("Failed to build revision: ${revision}")
+            }
+
+            warFiles.addAll(fileTree(dir: 'build/libs', include: '**/*.war').files)
+        }
+
+        def returnProc = "git checkout -".execute()
+        returnProc.waitFor()
+        if (returnProc.exitValue() != 0) {
+            throw new GradleException("Failed to return to original branch")
+        }
+
+        if (warFiles.isEmpty()) {
+            throw new GradleException("No WAR files found to archive")
+        }
+
+        def zipFile = new File(buildDir, "team_builds.zip")
+        ant.zip(destfile: zipFile) {
+            warFiles.each { warFile ->
+                if (warFile.exists()) {
+                    ant.zipfileset(src: warFile, prefix: "builds/")
+                } else {
+                    println "Warning: WAR file not found: ${warFile}"
+                }
+            }
+
+        }
+
+        println "The packing is complete: ${zipFile.absolutePath}"
+    }
+}
+
+tasks.register('diff') {
+    group = 'version control'
+    description = 'Checking the status of the working copy and commit changes to the git repository'
+
+    doLast {
+        def gitStatusOutput = 'git status --porcelain'.execute().text.trim()
+
+        if (gitStatusOutput) {
+            def classesToCommit = []
+            def paramsFile = new File('gradle.properties')
+            if (paramsFile.exists()) {
+                def projectProps1 = new Properties()
+                projectProps1.load(new FileInputStream(paramsFile))
+                classesToCommit = projectProps.getProperty('classesToCommit')?.split(',')
+            }
+
+            def changedClasses = gitStatusOutput.readLines().findAll { line ->
+                line =~ /^M\s+.*\.java$/ && classesToCommit.any { line.contains(it) }
+            }
+
+            if (changedClasses) {
+                println "Modified classes found for the commit: ${changedClasses}"
+
+                def commitMessage = "Changed classes ${changedClasses.join(', ')}"
+
+                "git commit -am '${commitMessage}'".execute().waitFor()
+                println "The changes have been successfully committed to the repository."
+            } else {
+                println "There are changes in the working copy, but there are no modified classes for the commit."
+            }
+        } else {
+            println "There are no changes in the working copy."
+        }
+    }
+}
+
+tasks.register('history') {
+    group = 'version control'
+    description = 'Downloading previous versions from the git repository and generating a file with diff results'
+
+    doLast {
+        def compileSuccess = false
+        def lastWorkingRevision = null
+        def revisionsToCheck = []
+
+        def gitLogOutput = 'git log --pretty=format:%H'.execute().text.trim()
+        def allRevisions = gitLogOutput.readLines()
+
+        allRevisions.reverse().each { revision ->
+            println "Checking revision: ${revision}"
+
+            def checkoutProc = "git checkout ${revision}".execute()
+            checkoutProc.waitFor()
+            if (checkoutProc.exitValue() != 0) {
+                throw new GradleException("Failed to checkout revision: ${revision}")
+            }
+
+            def gradlewCommand = System.getProperty('os.name').toLowerCase().contains('win') ? 'gradlew.bat' : './gradlew'
+            def compileProc = "${gradlewCommand} compile".execute()
+            def compileOutput = new StringBuffer()
+            def compileError = new StringBuffer()
+            compileProc.waitForProcessOutput(compileOutput, compileError)
+
+            println "Compile output for revision ${revision}:"
+            println compileOutput.toString()
+            println "Compile error for revision ${revision}:"
+            println compileError.toString()
+
+            if (compileProc.exitValue() == 0) {
+                compileSuccess = true
+                lastWorkingRevision = revision
+                println "Compilation succeeded for revision: ${revision}"
+            } else {
+                revisionsToCheck << revision
+                println "Compilation failed for revision: ${revision}"
+            }
+
+            if (lastWorkingRevision) {
+                return
+            }
+        }
+
+        if (lastWorkingRevision) {
+            println "Last successful revision: ${lastWorkingRevision}"
+
+            def projectDir = project.projectDir
+            def diffFile = new File(projectDir, 'diff_results.txt')
+            diffFile.withWriter { writer ->
+                revisionsToCheck.each { revision ->
+                    println "Checking changes in the revision: ${revision}"
+
+                    def diffOutput = new StringBuffer()
+                    def diffError = new StringBuffer()
+                    def diffProc = "git diff ${lastWorkingRevision}..${revision}".execute()
+                    diffProc.waitForProcessOutput(diffOutput, diffError)
+
+                    println "Diff output for revision ${revision}:"
+                    println diffOutput.toString()
+                    println "Diff error for revision ${revision}:"
+                    println diffError.toString()
+
+                    writer.println "Revision: ${revision}"
+                    writer.println diffOutput.toString()
+                }
+            }
+
+            println "The results of the diff operation are saved to a file: ${diffFile.absolutePath}"
+        } else {
+            println "The last working revision could not be found."
+        }
+    }
+}
+
+
+
+
+
+
+
