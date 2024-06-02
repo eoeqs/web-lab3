@@ -34,8 +34,7 @@ dependencies {
     implementation 'org.apache.commons:commons-text:1.9'
 
 
-//    testImplementation("org.junit.jupiter:junit-jupiter-api:${junitVersion}")
-//    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:${junitVersion}")
+
 }
 
 test {
@@ -273,55 +272,39 @@ tasks.register('xml') {
 }
 
 
+import java.nio.charset.StandardCharsets
+import java.nio.file.Files
+
+
 tasks.register('native2ascii') {
-    group = 'localization'
-    description = 'Convert localization files to ASCII encoding'
-
-    def sourceDir = file('src/main/resources/localization')
-    def targetDir = file("$buildDir/native2ascii")
-
-    inputs.dir(sourceDir)
-    outputs.dir(targetDir)
+    group = 'internationalization'
+    description = 'Convert text files to ASCII encoding using native2ascii'
 
     doLast {
-        println 'Starting native2ascii conversion'
+        def sourceDir = project.file('src/main/resources')
+        def targetDir = project.file('build/native2ascii')
 
-        println "Source directory: $sourceDir"
-        println "Target directory: $targetDir"
+        targetDir.mkdirs()
 
-        if (!sourceDir.exists()) {
-            throw new FileNotFoundException("Source directory not found: $sourceDir")
-        }
+        sourceDir.eachDir { dir ->
+            def targetSubDir = new File(targetDir, dir.name)
+            targetSubDir.mkdirs()
 
-        if (!targetDir.exists()) {
-            targetDir.mkdirs()
-        }
+            dir.eachFile { file ->
+                def targetFile = new File(targetSubDir, file.name)
 
-        sourceDir.eachFileRecurse { file ->
-            if (file.isFile() && file.name.endsWith('.properties')) {
-                println "Processing file: $file"
+                def content = Files.readAllLines(file.toPath(), StandardCharsets.UTF_8).join('\n')
 
-                def relativePath = sourceDir.toPath().relativize(file.toPath()).toString()
-                def targetFile = new File(targetDir, relativePath)
-                targetFile.parentFile.mkdirs()
+                def asciiContent = Base64.getEncoder().encodeToString(content.getBytes(StandardCharsets.UTF_8))
 
-                def properties = new Properties()
-                file.withReader('UTF-8') { reader ->
-                    properties.load(reader)
-                }
-                targetFile.withWriter('ASCII') { writer ->
-                    properties.store(writer, null)
-                }
-
-                println "File converted: ${file} -> ${targetFile}"
-            } else {
-                println "Skipping file: $file"
+                Files.write(targetFile.toPath(), asciiContent.getBytes(StandardCharsets.UTF_8)).join('\n')
             }
         }
 
-        println 'Finished native2ascii conversion'
+        println "Conversion complete. Results are saved in: ${targetDir}"
     }
 }
+
 
 
 tasks.register('history') {
@@ -422,7 +405,7 @@ tasks.register('history') {
         def checkoutProcess = gitCheckout.execute(null, new File(projectDir))
         checkoutProcess.waitFor()
         if (checkoutProcess.exitValue() == 0) {
-            println "Checked out to original revision."
+            println "Checked out to master."
         } else {
             println "Failed to checkout to original revision: ${checkoutProcess.errorStream.text}"
         }
