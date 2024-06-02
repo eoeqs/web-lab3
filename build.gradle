@@ -179,7 +179,6 @@ tasks.register('diff') {
     doLast {
         def projectDir = project.projectDir.absolutePath
 
-        // Load the classes to monitor from the parameters file
         def paramsFile = new File(projectDir, "build.properties")
         def paramsProps = new Properties()
         paramsProps.load(new FileInputStream(paramsFile))
@@ -191,13 +190,11 @@ tasks.register('diff') {
             return
         }
 
-        // We are monitoring all .java files, so no need to split classesToMonitor
         def gitStatus = ['git', 'status', '--porcelain']
         def gitProcess = gitStatus.execute(null, new File(projectDir))
         gitProcess.waitFor()
         def gitOutput = gitProcess.text.trim()
 
-        // Print the git status output for debugging
         println "Git status output: \n${gitOutput}"
 
         if (gitOutput) {
@@ -205,7 +202,6 @@ tasks.register('diff') {
                 it.substring(3).trim()
             }
 
-            // Print the list of modified files for debugging
             println "Modified files according to git status:"
             modifiedFiles.each { file ->
                 println " - ${file}"
