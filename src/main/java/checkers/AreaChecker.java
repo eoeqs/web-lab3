@@ -38,4 +38,8 @@ public class AreaChecker implements Serializable {
         return;
     }
 
+    private void pointIsIn1(double x, double y, double r) {
+        return;
+    }
+
 }

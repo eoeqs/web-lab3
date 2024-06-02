@@ -174,35 +174,38 @@ tasks.register('team') {
 
 tasks.register('diff') {
     group = 'version control'
-    description = 'Checks the status of the working copy and commits changes to the git repository if any Java files are modified'
+    description = 'Checks the status of the working copy and commits changes to the git repository if classes specified in the parameters file are modified'
 
     doLast {
         def projectDir = project.projectDir.absolutePath
 
-        // Recursively find all .java files in the project directory
-        def javaFiles = []
-        new File(projectDir).eachFileRecurse { file ->
-            if (file.isFile() && file.name.endsWith('.java')) {
-                javaFiles << file
-            }
-        }
+        // Load the classes to monitor from the parameters file
+        def paramsFile = new File(projectDir, "build.properties")
+        def paramsProps = new Properties()
+        paramsProps.load(new FileInputStream(paramsFile))
 
-        if (javaFiles.isEmpty()) {
-            println "No Java files found to monitor changes. Skipping diff task."
+        def classesToMonitor = paramsProps.getProperty('classesToMonitor')
+
+        if (classesToMonitor == null || classesToMonitor.isEmpty()) {
+            println "No classes specified to monitor changes. Skipping diff task."
             return
         }
 
+        // We are monitoring all .java files, so no need to split classesToMonitor
         def gitStatus = ['git', 'status', '--porcelain']
         def gitProcess = gitStatus.execute(null, new File(projectDir))
         gitProcess.waitFor()
         def gitOutput = gitProcess.text.trim()
 
+        // Print the git status output for debugging
+        println "Git status output: \n${gitOutput}"
+
         if (gitOutput) {
             def modifiedFiles = gitOutput.split('\n').findAll { it.startsWith(' M') || it.startsWith('A') }.collect {
-                it.substring(3).trim().replace('\\', '/')
+                it.substring(3).trim()
             }
 
-            // Print the list of modified files
+            // Print the list of modified files for debugging
             println "Modified files according to git status:"
             modifiedFiles.each { file ->
                 println " - ${file}"
@@ -210,12 +213,11 @@ tasks.register('diff') {
 
             def changesDetected = false
 
-            javaFiles.each { javaFile ->
-                def relativePath = javaFile.absolutePath.replace(projectDir + '/', '').replace('\\', '/')
-                println "Checking changes in: ${relativePath}"
-                if (modifiedFiles.contains(relativePath)) {
+            modifiedFiles.each { modifiedFile ->
+                println "Modified file: ${modifiedFile}"
+                if (modifiedFile.endsWith('.java')) {
                     changesDetected = true
-                    def commitMessage = "Changes detected in ${relativePath}."
+                    def commitMessage = "Changes detected in ${modifiedFile}."
                     println "Committing changes: ${commitMessage}"
                     def gitCommit = ['git', 'commit', '-am', commitMessage]
                     def commitProcess = gitCommit.execute(null, new File(projectDir))
@@ -230,13 +232,14 @@ tasks.register('diff') {
             }
 
             if (!changesDetected) {
-                println "No changes detected in Java files."
+                println "No changes detected in specified classes."
             }
         } else {
             println "No changes detected."
         }
     }
 }
+
 
 
 tasks.register('history') {
