@@ -33,13 +33,4 @@ public class AreaChecker implements Serializable {
     private boolean pointIsInTriangle(double x, double y, double r) {
         return (x >= 0 && y <= 0) && (x <= r) && (y <= r/2) && (x - 2*y <= r);
     }
-
-    private void pointIsIn(double x, double y, double r) {
-        return;
-    }
-
-    private void pointIsIn1(double x, double y, double r) {
-        return;
-    }
-
 }

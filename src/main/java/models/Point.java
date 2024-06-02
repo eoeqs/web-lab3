@@ -17,7 +17,12 @@ import java.util.Objects;
 public class Point implements Serializable {
 
     public Point() {
+
     }
+
+
+
+
     public void setResult(boolean result) {
         this.result = result;
     }
@@ -86,12 +91,6 @@ public class Point implements Serializable {
     }
 
     public boolean isResult() {
-        return result;
-    }
-    public boolean isResult1() {
-        return result;
-    }
-    public boolean isResult11() {
         return result;
     }
 
