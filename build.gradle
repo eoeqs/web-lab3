@@ -174,44 +174,52 @@ tasks.register('team') {
 
 tasks.register('diff') {
     group = 'version control'
-    description = 'Checks the status of the working copy and commits changes to the git repository if classes specified in the parameters file are modified'
+    description = 'Checks the status of the working copy and commits changes to the git repository if any Java files are modified'
 
     doLast {
         def projectDir = project.projectDir.absolutePath
 
-        def paramsFile = new File(projectDir, "build.properties")
-        def paramsProps = new Properties()
-        paramsProps.load(new FileInputStream(paramsFile))
+        def javaFiles = []
+        new File(projectDir).eachFileRecurse { file ->
+            if (file.name.endsWith('.java')) {
+                javaFiles << file
+            }
+        }
 
-        def classesToMonitor = paramsProps.getProperty('classesToMonitor')
+        println "Java files to monitor: ${javaFiles.collect { it.absolutePath }}"
 
-        if (classesToMonitor == null || classesToMonitor.isEmpty()) {
-            println "No classes specified to monitor changes. Skipping diff task."
+        if (javaFiles.isEmpty()) {
+            println "No Java files found to monitor changes. Skipping diff task."
             return
         }
 
-        classesToMonitor = classesToMonitor.split(',')
         def gitStatus = ['git', 'status', '--porcelain']
         def gitProcess = gitStatus.execute(null, new File(projectDir))
         gitProcess.waitFor()
         def gitOutput = gitProcess.text.trim()
 
+        println "Git status output: \n${gitOutput}"
+
         if (gitOutput) {
-            classesToMonitor.each { className ->
-                def classPattern = Pattern.compile(className.replace('.', '/') + '\\.class')
+            def modifiedFiles = gitOutput.split('\n').findAll { it.startsWith('M') }.collect {
+                it.substring(3).trim().replace('\\', '/')
+            }
 
-                def matcher = classPattern.matcher(gitOutput)
-                if (matcher.find()) {
-                    def commitMessage = "Changes detected in ${className}."
-                    def gitCommit = ['git', 'commit', '-am', commitMessage]
-                    def commitProcess = gitCommit.execute(null, new File(projectDir))
-                    commitProcess.waitFor()
+            modifiedFiles.each { modifiedFile ->
+                javaFiles.each { javaFile ->
+                    def relativePath = javaFile.absolutePath.replace(projectDir + '/', '').replace('\\', '/')
+                    if (modifiedFile == relativePath) {
+                        def commitMessage = "Changes detected in ${relativePath}."
+                        def gitCommit = ['git', 'commit', '-am', commitMessage]
+                        def commitProcess = gitCommit.execute(null, new File(projectDir))
+                        commitProcess.waitFor()
 
-                    if (commitProcess.exitValue() != 0) {
-                        throw new GradleException("Failed to commit changes.")
+                        if (commitProcess.exitValue() != 0) {
+                            throw new GradleException("Failed to commit changes.")
+                        }
+
+                        println "Changes committed: ${commitMessage}"
                     }
-
-                    println "Changes committed: ${commitMessage}"
                 }
             }
         } else {
@@ -220,8 +228,6 @@ tasks.register('diff') {
     }
 }
 
-
-import java.util.regex.Pattern
 
 tasks.register('history') {
     group = 'version control'

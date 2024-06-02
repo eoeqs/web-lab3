@@ -91,6 +91,9 @@ public class Point implements Serializable {
     public boolean isResult1() {
         return result;
     }
+    public boolean isResult11() {
+        return result;
+    }
 
     @Column(name = "x", nullable = false)
     private double x;
