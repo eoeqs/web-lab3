@@ -31,6 +31,7 @@ dependencies {
     implementation('org.glassfish.jaxb:jaxb-runtime:3.0.2')
     implementation('org.primefaces:primefaces:13.0.0:jakarta')
     implementation('com.google.code.gson:gson:2.10.1')
+    implementation 'org.apache.commons:commons-text:1.9'
 
 
 //    testImplementation("org.junit.jupiter:junit-jupiter-api:${junitVersion}")
@@ -152,12 +153,225 @@ tasks.register('doc') {
     dependsOn 'javadoc_task', 'md5sha1'
 }
 
+tasks.register('team') {
+    group = 'build'
+    description = 'Getting the 3 previous revisions from git, building them and packing them into a zip archive'
+
+    doLast {
+        def projectDir = project.projectDir.absolutePath
+        def scriptDir = projectDir
+
+        def command = ['groovy', "${scriptDir}/teamBuilder.groovy", projectDir, project.buildDir]
+        def process = command.execute()
+        process.waitFor()
+
+        if (process.exitValue() != 0) {
+            throw new GradleException("Failed to execute teamBuilder.groovy")
+        }
+    }
+}
 
 
+tasks.register('diff') {
+    group = 'version control'
+    description = 'Checks the status of the working copy and commits changes to the git repository if classes specified in the parameters file are modified'
+
+    doLast {
+        def projectDir = project.projectDir.absolutePath
+
+        def paramsFile = new File(projectDir, "build.properties")
+        def paramsProps = new Properties()
+        paramsProps.load(new FileInputStream(paramsFile))
+
+        def classesToMonitor = paramsProps.getProperty('classesToMonitor')
+
+        if (classesToMonitor == null || classesToMonitor.isEmpty()) {
+            println "No classes specified to monitor changes. Skipping diff task."
+            return
+        }
+
+        classesToMonitor = classesToMonitor.split(',')
+        def gitStatus = ['git', 'status', '--porcelain']
+        def gitProcess = gitStatus.execute(null, new File(projectDir))
+        gitProcess.waitFor()
+        def gitOutput = gitProcess.text.trim()
+
+        if (gitOutput) {
+            classesToMonitor.each { className ->
+                def classPattern = Pattern.compile(className.replace('.', '/') + '\\.class')
+
+                def matcher = classPattern.matcher(gitOutput)
+                if (matcher.find()) {
+                    def commitMessage = "Changes detected in ${className}."
+                    def gitCommit = ['git', 'commit', '-am', commitMessage]
+                    def commitProcess = gitCommit.execute(null, new File(projectDir))
+                    commitProcess.waitFor()
+
+                    if (commitProcess.exitValue() != 0) {
+                        throw new GradleException("Failed to commit changes.")
+                    }
+
+                    println "Changes committed: ${commitMessage}"
+                }
+            }
+        } else {
+            println "No changes detected."
+        }
+    }
+}
 
 
+import java.util.regex.Pattern
+
+tasks.register('history') {
+    group = 'version control'
+    description = 'Restores previous project versions from git until a working version is found and generates a diff file for each changed file in the next revision after the last successful build.'
+
+    doLast {
+        def projectDir = project.projectDir.absolutePath
+
+        def paramsFile = new File(projectDir, "build.properties")
+        def paramsProps = new Properties()
+        paramsProps.load(new FileInputStream(paramsFile))
+
+        def lastSuccessfulRevision = paramsProps.getProperty('lastSuccessfulRevision')
+
+        if (lastSuccessfulRevision == null) {
+            lastSuccessfulRevision = 'HEAD'
+        }
+
+        def gitCheckout = ['git', 'checkout']
+        def gitDiff = ['git', 'diff']
+
+        def currentRevision = lastSuccessfulRevision
+        while (true) {
+            gitCheckout.add(currentRevision)
+            def checkoutProcess = gitCheckout.execute(null, new File(projectDir))
+            checkoutProcess.waitFor()
+
+            if (checkoutProcess.exitValue() != 0) {
+                println "Failed to checkout revision: ${currentRevision}"
+                break
+            }
+
+            def buildTask = project.tasks.findByName('build_task')
+            def buildResult = buildTask?.didWork
+
+            if (buildResult != false) {
+                println "Project compiled successfully at revision: ${currentRevision}"
+
+                def nextRevision = currentRevision + "^"
+
+                def diffOutput = ""
+                gitDiff.add(nextRevision)
+                def diffProcess = gitDiff.execute(null, new File(projectDir))
+                diffProcess.waitFor()
+                if (diffProcess.exitValue() == 0) {
+                    diffOutput = diffProcess.text
+                }
+
+                def diffFile = new File(projectDir, "diff_${nextRevision}.txt")
+                diffFile.write(diffOutput)
+
+                paramsProps.setProperty('lastSuccessfulRevision', currentRevision)
+                paramsProps.store(new FileWriter(paramsFile), null)
+
+                println "Diff file generated for revision ${nextRevision}: ${diffFile}"
+                break
+            } else {
+                println "Build failed at revision: ${currentRevision}"
+            }
+
+            def prevRevision = currentRevision + "^"
+            if (prevRevision == 'HEAD^') {
+                println "Reached the first revision. No working version found."
+                break
+            }
+            currentRevision = prevRevision
+        }
+    }
+}
+
+import javax.xml.XMLConstants
+import javax.xml.transform.stream.StreamSource
+import javax.xml.validation.SchemaFactory
+
+tasks.register('xml') {
+    group = 'verification'
+    description = 'Validate all XML files in the project'
+
+    doLast {
+        def projectDir = project.projectDir
+        def xmlFiles = fileTree(projectDir).matching {
+            include '**/*.xml'
+        }
+
+        if (xmlFiles.isEmpty()) {
+            println "No XML files found in the project."
+            return
+        }
+
+        xmlFiles.each { xmlFile ->
+            try {
+                SchemaFactory schemaFactory = SchemaFactory.newInstance(XMLConstants.W3C_XML_SCHEMA_NS_URI);
+
+                schemaFactory.newSchema().newValidator().validate(new StreamSource(xmlFile))
+                println "Validation passed for file: ${xmlFile.path}"
+            } catch (Exception e) {
+                println "Validation failed for file: ${xmlFile.path}"
+                println "Error message: ${e.message}"
+            }
+        }
+    }
+}
 
 
+tasks.register('native2ascii') {
+    group = 'localization'
+    description = 'Convert localization files to ASCII encoding'
 
+    def sourceDir = file('src/main/resources/localization')
+    def targetDir = file("$buildDir/native2ascii")
 
+    inputs.dir(sourceDir)
+    outputs.dir(targetDir)
 
+    doLast {
+        println 'Starting native2ascii conversion'
+
+        println "Source directory: $sourceDir"
+        println "Target directory: $targetDir"
+
+        if (!sourceDir.exists()) {
+            throw new FileNotFoundException("Source directory not found: $sourceDir")
+        }
+
+        if (!targetDir.exists()) {
+            targetDir.mkdirs()
+        }
+
+        sourceDir.eachFileRecurse { file ->
+            if (file.isFile() && file.name.endsWith('.properties')) {
+                println "Processing file: $file"
+
+                def relativePath = sourceDir.toPath().relativize(file.toPath()).toString()
+                def targetFile = new File(targetDir, relativePath)
+                targetFile.parentFile.mkdirs()
+
+                def properties = new Properties()
+                file.withReader('UTF-8') { reader ->
+                    properties.load(reader)
+                }
+                targetFile.withWriter('ASCII') { writer ->
+                    properties.store(writer, null)
+                }
+
+                println "File converted: ${file} -> ${targetFile}"
+            } else {
+                println "Skipping file: $file"
+            }
+        }
+
+        println 'Finished native2ascii conversion'
+    }
+}
