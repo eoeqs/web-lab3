@@ -157,16 +157,68 @@ tasks.register('team') {
     description = 'Getting the 3 previous revisions from git, building them and packing them into a zip archive'
 
     doLast {
-        def projectDir = project.projectDir.absolutePath
-        def scriptDir = projectDir
+        def revisions = []
+        def jarFiles = []
 
-        def command = ['groovy', "${scriptDir}/teamBuilder.groovy", projectDir, project.buildDir]
-        def process = command.execute()
-        process.waitFor()
-
-        if (process.exitValue() != 0) {
-            throw new GradleException("Failed to execute teamBuilder.groovy")
+        def proc = "git rev-list -n 4 HEAD".execute()
+        proc.in.eachLine { line ->
+            revisions << line
         }
+
+        revisions = revisions.drop(1)
+
+        def projectDir = project.projectDir.absolutePath
+
+        revisions.each { revision ->
+            println "Building revision: ${revision}"
+
+            def stashProc = "git stash --include-untracked".execute(null, new File(projectDir))
+            stashProc.waitFor()
+            if (stashProc.exitValue() != 0) {
+                throw new GradleException("Failed to stash changes before checkout: ${stashProc.err.text}")
+            }
+
+            def checkoutProc = "git checkout ${revision}".execute(null, new File(projectDir))
+            checkoutProc.waitFor()
+            if (checkoutProc.exitValue() != 0) {
+                throw new GradleException("Failed to checkout revision: ${revision} - ${checkoutProc.err.text}")
+            }
+
+            def gradlewCommand = System.getProperty('os.name').toLowerCase().contains('win') ? 'gradlew.bat' : './gradlew'
+            def buildProc = "${gradlewCommand} clean build_task".execute(null, new File(projectDir))
+            buildProc.waitFor()
+            if (buildProc.exitValue() != 0) {
+                throw new GradleException("Failed to build revision: ${revision} - ${buildProc.err.text}")
+            }
+
+            def warFileDir = file("${projectDir}/build/libs")
+            jarFiles.addAll(fileTree(dir: warFileDir, include: '**/*.jar').files)
+
+            def stashPopProc = "git stash pop".execute(null, new File(projectDir))
+            stashPopProc.waitFor()
+            if (stashPopProc.exitValue() != 0) {
+                println "Warning: Failed to apply stashed changes after building revision: ${revision} - ${stashPopProc.err.text}"
+            }
+        }
+
+        if (jarFiles.isEmpty()) {
+            throw new GradleException("No JAR files found to archive")
+        }
+
+        def zipFile = new File("${projectDir}/team_builds.zip")
+        ant.zip(destfile: zipFile) {
+            jarFiles.each { jarFile ->
+                if (jarFile.exists()) {
+                    ant.zipfileset(src: jarFile, prefix: "builds/")
+                } else {
+                    println "Warning: JAR file not found: ${jarFile}"
+                }
+            }
+        }
+
+        println "The packing is complete: ${zipFile.absolutePath}"
+
+
     }
 }
 
