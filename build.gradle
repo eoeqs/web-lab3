@@ -179,14 +179,13 @@ tasks.register('diff') {
     doLast {
         def projectDir = project.projectDir.absolutePath
 
+        // Recursively find all .java files in the project directory
         def javaFiles = []
         new File(projectDir).eachFileRecurse { file ->
-            if (file.name.endsWith('.java')) {
+            if (file.isFile() && file.name.endsWith('.java')) {
                 javaFiles << file
             }
         }
-
-        println "Java files to monitor: ${javaFiles.collect { it.absolutePath }}"
 
         if (javaFiles.isEmpty()) {
             println "No Java files found to monitor changes. Skipping diff task."
@@ -198,29 +197,40 @@ tasks.register('diff') {
         gitProcess.waitFor()
         def gitOutput = gitProcess.text.trim()
 
-        println "Git status output: \n${gitOutput}"
-
         if (gitOutput) {
-            def modifiedFiles = gitOutput.split('\n').findAll { it.startsWith('M') }.collect {
+            def modifiedFiles = gitOutput.split('\n').findAll { it.startsWith(' M') || it.startsWith('A') }.collect {
                 it.substring(3).trim().replace('\\', '/')
             }
 
-            modifiedFiles.each { modifiedFile ->
-                javaFiles.each { javaFile ->
-                    def relativePath = javaFile.absolutePath.replace(projectDir + '/', '').replace('\\', '/')
-                    if (modifiedFile == relativePath) {
-                        def commitMessage = "Changes detected in ${relativePath}."
-                        def gitCommit = ['git', 'commit', '-am', commitMessage]
-                        def commitProcess = gitCommit.execute(null, new File(projectDir))
-                        commitProcess.waitFor()
+            // Print the list of modified files
+            println "Modified files according to git status:"
+            modifiedFiles.each { file ->
+                println " - ${file}"
+            }
 
-                        if (commitProcess.exitValue() != 0) {
-                            throw new GradleException("Failed to commit changes.")
-                        }
+            def changesDetected = false
 
-                        println "Changes committed: ${commitMessage}"
+            javaFiles.each { javaFile ->
+                def relativePath = javaFile.absolutePath.replace(projectDir + '/', '').replace('\\', '/')
+                println "Checking changes in: ${relativePath}"
+                if (modifiedFiles.contains(relativePath)) {
+                    changesDetected = true
+                    def commitMessage = "Changes detected in ${relativePath}."
+                    println "Committing changes: ${commitMessage}"
+                    def gitCommit = ['git', 'commit', '-am', commitMessage]
+                    def commitProcess = gitCommit.execute(null, new File(projectDir))
+                    commitProcess.waitFor()
+
+                    if (commitProcess.exitValue() != 0) {
+                        throw new GradleException("Failed to commit changes.")
                     }
+
+                    println "Changes committed: ${commitMessage}"
                 }
+            }
+
+            if (!changesDetected) {
+                println "No changes detected in Java files."
             }
         } else {
             println "No changes detected."
