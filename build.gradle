@@ -222,7 +222,6 @@ tasks.register('team') {
     }
 }
 
-
 tasks.register('diff') {
     group = 'version control'
     description = 'Checks the status of the working copy and commits changes to the git repository if classes specified in the parameters file are modified'
