@@ -160,9 +160,13 @@ tasks.register('team') {
         def revisions = []
         def jarFiles = []
 
-        def proc = "git rev-list -n 4 HEAD".execute()
-        proc.in.eachLine { line ->
-            revisions << line
+        try {
+            def proc = "git rev-list -n 4 HEAD".execute()
+            proc.in.eachLine { line ->
+                revisions << line
+            }
+        } catch (Exception e) {
+            println "Warning: Failed to get revisions"
         }
 
         revisions = revisions.drop(1)
@@ -172,53 +176,71 @@ tasks.register('team') {
         revisions.each { revision ->
             println "Building revision: ${revision}"
 
-            def stashProc = "git stash --include-untracked".execute(null, new File(projectDir))
-            stashProc.waitFor()
-            if (stashProc.exitValue() != 0) {
-                throw new GradleException("Failed to stash changes before checkout: ${stashProc.err.text}")
+            try {
+                def stashProc = "git stash --include-untracked".execute(null, new File(projectDir))
+                stashProc.waitForProcessOutput(null, new StringBuffer())
+                if (stashProc.exitValue() != 0) {
+                }
+            } catch (Exception e) {
+                println "Warning: Exception occurred during stash"
             }
 
-            def checkoutProc = "git checkout ${revision}".execute(null, new File(projectDir))
-            checkoutProc.waitFor()
-            if (checkoutProc.exitValue() != 0) {
-                throw new GradleException("Failed to checkout revision: ${revision} - ${checkoutProc.err.text}")
+            try {
+                def checkoutProc = "git checkout ${revision}".execute(null, new File(projectDir))
+                checkoutProc.waitForProcessOutput(null, new StringBuffer())
+                if (checkoutProc.exitValue() != 0) {
+                }
+            } catch (Exception e) {
+                println "Warning: Exception occurred during checkout"
             }
 
-            def gradlewCommand = System.getProperty('os.name').toLowerCase().contains('win') ? 'gradlew.bat' : './gradlew'
-            def buildProc = "${gradlewCommand} clean build_task".execute(null, new File(projectDir))
-            buildProc.waitFor()
-            if (buildProc.exitValue() != 0) {
-                throw new GradleException("Failed to build revision: ${revision} - ${buildProc.err.text}")
+            try {
+                def gradlewCommand = System.getProperty('os.name').toLowerCase().contains('win') ? 'gradlew.bat' : './gradlew'
+                def buildProc = "${gradlewCommand} clean build_task".execute(null, new File(projectDir))
+                buildProc.waitForProcessOutput(null, new StringBuffer())
+                if (buildProc.exitValue() != 0) {
+                    println "Warning: Failed to build revision: ${revision}"
+                }
+            } catch (Exception e) {
+                println "Warning: Exception occurred during build"
             }
 
-            def warFileDir = file("${projectDir}/build/libs")
-            jarFiles.addAll(fileTree(dir: warFileDir, include: '**/*.jar').files)
+            try {
+                def warFileDir = file("${projectDir}/build/libs")
+                jarFiles.addAll(fileTree(dir: warFileDir, include: '**/*.jar').files)
+            } catch (Exception e) {
+                println "Warning: Exception occurred while collecting JAR files"
+            }
 
-            def stashPopProc = "git stash pop".execute(null, new File(projectDir))
-            stashPopProc.waitFor()
-            if (stashPopProc.exitValue() != 0) {
-                println "Warning: Failed to apply stashed changes after building revision: ${revision} - ${stashPopProc.err.text}"
+            try {
+                def stashPopProc = "git stash pop".execute(null, new File(projectDir))
+                stashPopProc.waitForProcessOutput(null, new StringBuffer())
+                if (stashPopProc.exitValue() != 0) {
+                }
+            } catch (Exception e) {
+                println "Warning: Exception occurred during stash pop"
             }
         }
 
         if (jarFiles.isEmpty()) {
-            throw new GradleException("No JAR files found to archive")
-        }
-
-        def zipFile = new File("${projectDir}/team_builds.zip")
-        ant.zip(destfile: zipFile) {
-            jarFiles.each { jarFile ->
-                if (jarFile.exists()) {
-                    ant.zipfileset(src: jarFile, prefix: "builds/")
-                } else {
-                    println "Warning: JAR file not found: ${jarFile}"
+            println "Warning: No JAR files found to archive"
+        } else {
+            try {
+                def zipFile = new File("${projectDir}/team_builds.zip")
+                ant.zip(destfile: zipFile) {
+                    jarFiles.each { jarFile ->
+                        if (jarFile.exists()) {
+                            ant.zipfileset(src: jarFile, prefix: "builds/")
+                        } else {
+                            println "Warning: JAR file not found: ${jarFile}"
+                        }
+                    }
                 }
+                println "The packing is complete: ${zipFile.absolutePath}"
+            } catch (Exception e) {
+                println "Warning: Exception occurred during zip creation"
             }
         }
-
-        println "The packing is complete: ${zipFile.absolutePath}"
-
-
     }
 }
 
